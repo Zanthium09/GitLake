@@ -212,12 +212,18 @@ def main() -> None:
         .selectExpr("max(version) AS v")
         .collect()[0]["v"]
     )
-    written = spark.read.format("delta").load(output).count()
+    # Count only the partitions this run touched. Counting the whole table
+    # compares against days written by earlier runs and reports a mismatch
+    # that is not one.
+    table = spark.read.format("delta").load(output)
+    written = table.filter(F.expr(date_filter)).count()
+    total = table.count()
 
-    print(f"\nwrote     : {written:,} rows at Delta version {version}")
+    print(f"\nwrote     : {written:,} rows into {len(dates)} partition(s)")
+    print(f"table     : {total:,} rows total, Delta version {version}")
     print(f"elapsed   : {time.time() - started:.1f}s")
     if written != rows:
-        sys.exit(f"Row count mismatch: read {rows:,}, table holds {written:,}")
+        sys.exit(f"Row count mismatch: read {rows:,}, partitions hold {written:,}")
 
     spark.stop()
 

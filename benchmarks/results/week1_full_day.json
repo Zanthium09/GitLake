@@ -1,0 +1,20 @@
+{
+  "table": "s3a://gitlake-rushabh-mumbai/delta/events",
+  "versions": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "operations": [
+    "WRITE",
+    "WRITE",
+    "WRITE",
+    "WRITE",
+    "DELETE"
+  ],
+  "row_count_previous_version": 6723964,
+  "row_count_latest_version": 5528301,
+  "reran_same_input": false
+}
