@@ -68,6 +68,13 @@ def build_spark(output_path: str, driver_memory: str) -> SparkSession:
         # one machine it produces 200 tiny tasks whose scheduling costs more
         # than the work.
         .config("spark.sql.shuffle.partitions", "16")
+        # The archive stamps events in UTC. Without this, Spark parses them
+        # into the machine's local zone, so on an IST laptop the UTC day
+        # 2024-01-15 lands as 05:30 on the 15th through 05:29 on the 16th --
+        # splitting one day across two partitions and shifting every
+        # hour-of-day figure by 5.5 hours. Silent, plausible, and wrong.
+        # Pinning to UTC also makes the output identical on any machine.
+        .config("spark.sql.session.timeZone", "UTC")
     )
 
     if needs_s3:
