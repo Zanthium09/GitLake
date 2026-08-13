@@ -51,6 +51,12 @@ services:
       # KRaft requires a cluster id at format time. Pinned rather than
       # generated so the volume survives a container recreate.
       CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
+
+      # Must be set explicitly. This image defaults to /tmp/kafka-logs, so a
+      # volume mounted anywhere else is silently ignored -- the broker works,
+      # the topic looks fine, and everything is lost when the container is
+      # removed because /tmp lives in the container's own filesystem.
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:
