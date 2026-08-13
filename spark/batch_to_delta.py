@@ -42,15 +42,25 @@ HADOOP_AWS_PACKAGES = (
 )
 
 
-def build_spark(output_path: str, driver_memory: str) -> SparkSession:
+def build_spark(
+    output_path: str, driver_memory: str, extra_packages: str = ""
+) -> SparkSession:
     """Create a Spark session, adding S3 support only when writing to s3a://.
 
     The hadoop-aws and AWS SDK jars are ~200 MB. Pulling them for a local run
     wastes a download and slows every iteration, so they are only requested
     when the output path actually needs them.
+
+    extra_packages exists because spark.jars.packages must be set before the
+    JVM starts -- setting it via spark.conf.set() after getOrCreate() is a
+    silent no-op, the session already resolved its jars. stream_to_delta.py
+    uses this to add the Kafka connector rather than reaching for the config
+    map after the fact.
     """
     needs_s3 = output_path.startswith("s3a://")
     packages = DELTA_PACKAGE + ("," + HADOOP_AWS_PACKAGES if needs_s3 else "")
+    if extra_packages:
+        packages += "," + extra_packages
 
     builder = (
         SparkSession.builder.appName("gitlake-batch-to-delta")

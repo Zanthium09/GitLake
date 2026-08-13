@@ -1,0 +1,10 @@
+{
+  "output": "/home/rushabh/gitlake/data/delta/kill_restart_test",
+  "checkpoint": "/home/rushabh/gitlake/data/checkpoints/kill_restart_test",
+  "kill_after_seconds": 20,
+  "max_offsets_per_trigger": 5000,
+  "process_was_killed_mid_run": true,
+  "micro_batches_committed_before_kill": 0,
+  "restart_exit_code": 0,
+  "zero_duplicates": true
+}

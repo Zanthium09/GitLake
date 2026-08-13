@@ -1,0 +1,9 @@
+{
+  "batches": 4,
+  "input_rows": 197313,
+  "dropped_by_watermark": 1,
+  "late_event_rate": 5.068089786278653e-06,
+  "watermark_duration": "10 minutes",
+  "table_rows_after_run": 197312,
+  "elapsed_seconds": 14.870341062545776
+}
