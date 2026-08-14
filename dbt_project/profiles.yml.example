@@ -1,0 +1,19 @@
+# Copy to ~/.dbt/profiles.yml -- dbt's global config directory, outside this
+# repo, so the real file can never be accidentally committed regardless of
+# .gitignore. Values pull from environment variables (the same .env this
+# project already uses), so no secret is ever written into a YAML file at
+# all, copied or not.
+
+gitlake:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: ACCOUNTADMIN
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      schema: DBT
+      threads: 4

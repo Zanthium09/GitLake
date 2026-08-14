@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: stg_events
+    description: One row per GitHub Archive event, lightly cleaned.
+    columns:
+      - name: event_id
+        tests:
+          - not_null
+          - unique:
+              # Not error: GitHub Archive itself emitted event 34822912958
+              # twice, byte-identical, confirmed by hand -- see the model's
+              # SQL comment. Failing the whole build on one confirmed
+              # upstream duplicate would hide a real signal by treating it
+              # the same as an actual pipeline bug. warn keeps it visible in
+              # every `dbt build` without blocking the marts that sit on top
+              # of this model.
+              config:
+                severity: warn
+      - name: event_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                - PushEvent
+                - CreateEvent
+                - DeleteEvent
+                - PullRequestEvent
+                - PullRequestReviewEvent
+                - PullRequestReviewCommentEvent
+                - IssuesEvent
+                - IssueCommentEvent
+                - WatchEvent
+                - ForkEvent
+                - ReleaseEvent
+                - PublicEvent
+                - CommitCommentEvent
+                - MemberEvent
+                - GollumEvent
+      - name: created_at
+        tests:
+          - not_null
+
+  - name: stg_actors
+    description: One row per actor_id, latest known login.
+    columns:
+      - name: actor_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_repos
+    description: One row per repo_id, latest known name.
+    columns:
+      - name: repo_id
+        tests:
+          - not_null
+          - unique

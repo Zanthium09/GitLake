@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: fct_events
+    description: One row per event_id. The fact table.
+    columns:
+      - name: event_id
+        tests:
+          - not_null
+          - unique
+      - name: repo_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_repos')
+                field: repo_id
+      - name: actor_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_actors')
+                field: actor_id
+
+  - name: dim_repos
+    description: One row per repo_id, current attributes + activity summary.
+    columns:
+      - name: repo_id
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_actors
+    description: One row per actor_id, current attributes + activity summary.
+    columns:
+      - name: actor_id
+        tests:
+          - not_null
+          - unique

@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: raw
+    database: GITLAKE
+    schema: RAW
+    tables:
+      - name: EVENTS
+        description: >
+          Flattened GitHub Archive events, one row per event, loaded by
+          snowflake/copy_into.sql from the Parquet snapshot
+          spark/export_for_snowflake.py writes. Columns mirror flatten() in
+          spark/batch_to_delta.py exactly.
+        config:
+          loaded_at_field: created_at

@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: int_daily_repo_activity
+    description: One row per (repo_id, event_date), event counts by type.
+    columns:
+      - name: daily_repo_activity_id
+        tests:
+          - not_null
+          - unique
+      - name: repo_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_repos')
+                field: repo_id
+
+  - name: int_actor_first_last_seen
+    description: One row per actor_id, first/last event timestamps.
+    columns:
+      - name: actor_id
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_actors')
+                field: actor_id
