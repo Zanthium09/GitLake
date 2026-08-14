@@ -1,0 +1,16 @@
+# Astro Runtime includes the following pre-installed providers packages: https://www.astronomer.io/docs/astro/runtime-image-architecture#provider-packages
+
+# Same toolchain as the WSL venv, installed into the worker image itself
+# rather than bind-mounting host binaries -- Astro Runtime is a different
+# base image (different glibc, different shared libs) than the Ubuntu 22.04
+# WSL install, so host Java/pip binaries are not guaranteed to run inside it.
+# Baking the deps into the image and mounting only source code is the
+# standard, portable pattern.
+pyspark==3.5.0
+delta-spark==3.1.0
+boto3
+kafka-python
+python-dotenv
+snowflake-connector-python
+dbt-snowflake
+

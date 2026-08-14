@@ -22,14 +22,12 @@ new here is everything that makes a stream safe to kill and restart:
 
   withWatermark + dropDuplicates(event_id)
                                 bounds how long the engine keeps state for
-                                deduplication (10 minutes of event time) and
-                                uses that state to drop true duplicate
-                                messages. Reading across 4 partitions in
-                                parallel interleaves events that were mostly
-                                time-ordered within one partition, so some
-                                genuinely arrive "late" relative to the
-                                stream's watermark -- those get counted, not
-                                silently discarded. See LateEventListener.
+                                deduplication and uses that state to drop
+                                true duplicate messages. See LateEventListener
+                                for how the drop rate gets measured, and the
+                                WATERMARK_DURATION comment below for why it is
+                                26 hours, not the 10 minutes a genuinely
+                                real-time feed would use.
 
 Run:
     ./.venv/bin/python spark/stream_to_delta.py \
@@ -57,7 +55,25 @@ sys.path.insert(0, str(Path(__file__).parent))
 from batch_to_delta import build_spark, flatten  # noqa: E402
 from schema import EVENT_SCHEMA  # noqa: E402
 
-WATERMARK_DURATION = "10 minutes"
+# 26 hours, not 10 minutes. This pipeline replays a full HISTORICAL day
+# through Kafka in ~15-20 minutes of wall-clock time, across 4 partitions
+# with no ordering guarantee between them. A 10-minute watermark is the
+# right number for a genuinely real-time feed, where "how late can one event
+# arrive relative to another" is actually bounded by real-world jitter. It
+# is the wrong number here: measured empirically at full scale (24 hours,
+# 5,528,301 events), a 10-minute watermark dropped 30.4% of the day as
+# "late" -- not straggling individual events, but ordinary partition
+# consumption skew. If partition 0 happens to be a few micro-batches ahead
+# of partition 3 at any point, the watermark (driven by the max event time
+# seen so far, across all partitions) races ahead of partition 3's true
+# position, and partition 3's still-legitimate, still-in-order events get
+# judged "late" the moment they arrive. Widening the watermark past the
+# entire replay window removes that false-positive path while still
+# bounding dedup state and still catching genuinely stale data (a multi-day
+# clock skew, a stale reprocess) -- the mechanism this pipeline needs to
+# demonstrate stays intact, just calibrated to what this pipeline actually
+# does: batch-replay a day, not stream events as they happen.
+WATERMARK_DURATION = "26 hours"
 
 
 class LateEventListener(StreamingQueryListener):

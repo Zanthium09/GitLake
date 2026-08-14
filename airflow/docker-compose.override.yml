@@ -1,0 +1,51 @@
+# Mounts the gitlake repo (spark/, ingest/, snowflake/, dbt_project/, .env)
+# into the scheduler container read-only, so DAG tasks run the exact same
+# scripts already tested from the WSL venv rather than a second copy baked
+# into the image. Only source code is mounted -- Java and the Python
+# packages themselves are installed into the image via packages.txt and
+# requirements.txt (see those files for why: a different base image means
+# host binaries are not safe to bind-mount).
+#
+# scheduler only, not every service: this Astro Runtime version runs
+# api-server, dag-processor, scheduler, and triggerer as separate
+# containers (confirmed via `docker ps` after a baseline start -- there is
+# no "webserver" service in this version, which is what an earlier version
+# of this file got wrong and failed on). No worker container exists, which
+# means this is LocalExecutor and the scheduler is the only container that
+# actually executes BashOperator tasks. api-server serves the UI,
+# dag-processor only parses this file's Python syntax (no pyspark/dbt calls
+# happen at import time), and triggerer handles deferred operators, which
+# this DAG does not use. None of the other three need the toolchain.
+#
+# Java 21, not 17: Astro Runtime 3.3-2's Debian base (trixie) does not
+# package openjdk-17 at all, only 21 and 25 -- confirmed via
+# `apt-cache search openjdk` inside the base image, not assumed. 21 is the
+# LTS choice and Spark 3.5.0 supports it. This only affects the Airflow
+# container; the WSL venv keeps Java 17 per CLAUDE.md, since that install
+# never had this constraint.
+#
+# Joined to gitlake_default (Kafka's compose network), not routed through
+# host.docker.internal. That was tried first and looked right -- the
+# hostname resolves, the initial connection succeeds -- but Kafka's EXTERNAL
+# listener advertises itself back to clients as localhost:9092, which is
+# correct for a process on the WSL host and wrong for a process in a
+# different container, where localhost means itself. The client would
+# complete the handshake, get redirected to a dead address, and time out
+# after 60s trying to fetch metadata. Attaching this container to Kafka's
+# own network and using its INTERNAL listener (kafka:29092) is what Kafka
+# UI already does correctly, and sidesteps the advertised-listener mismatch
+# entirely rather than trying to add a fourth listener for this one case.
+networks:
+  gitlake_kafka:
+    external: true
+    name: gitlake_default
+
+services:
+  scheduler:
+    volumes:
+      - ..:/usr/local/airflow/gitlake:ro
+    environment:
+      JAVA_HOME: /usr/lib/jvm/java-21-openjdk-amd64
+    networks:
+      - default
+      - gitlake_kafka

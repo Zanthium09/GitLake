@@ -19,6 +19,18 @@ holds one version. Run this before every Snowflake load; it is cheap relative
 to the load itself and is the only way to keep file count matching row count
 without touching the source table's history.
 
+This export path is a different case from the source table, and gets
+VACUUMed here -- found the hard way, when Airflow's daily DAG called this
+script on every run (not once, the way it was tested manually in week 3) and
+COPY INTO started returning 18,752,259 rows against a table holding 5,528,300
+distinct events, a 3.4x inflation exactly matching three accumulated
+export runs. Every overwrite of DEST leaves its own predecessor's files
+behind for the identical reason SOURCE does, and COPY INTO has no more
+_delta_log awareness of DEST than it does of SOURCE. But DEST has no reason
+to ever need time travel -- it exists solely as a Snowflake staging copy,
+rebuilt fresh before every load -- so RETAIN 0 HOURS here costs nothing and
+closes the loop this script's own repeated use kept reopening.
+
 Run:
     ./.venv/bin/python spark/export_for_snowflake.py
 """
@@ -57,6 +69,14 @@ def main() -> None:
     )
 
     written = spark.read.format("delta").load(DEST).count()
+
+    # Safe at RETAIN 0 HOURS specifically because DEST is disposable -- see
+    # the module docstring. The safety check is disabled because the normal
+    # 7-day minimum exists to protect concurrent readers and time travel,
+    # neither of which this path ever needs to support.
+    spark.conf.set("spark.databricks.delta.retentionDurationCheck.enabled", "false")
+    spark.sql(f"VACUUM delta.`{DEST}` RETAIN 0 HOURS")
+
     elapsed = time.time() - started
 
     print(f"source rows : {row_count:,}")
