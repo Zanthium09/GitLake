@@ -23,11 +23,27 @@ new here is everything that makes a stream safe to kill and restart:
   withWatermark + dropDuplicates(event_id)
                                 bounds how long the engine keeps state for
                                 deduplication and uses that state to drop
-                                true duplicate messages. See LateEventListener
-                                for how the drop rate gets measured, and the
-                                WATERMARK_DURATION comment below for why it is
-                                26 hours, not the 10 minutes a genuinely
-                                real-time feed would use.
+                                true duplicate messages within one streaming
+                                run. See LateEventListener for how the drop
+                                rate gets measured, and the WATERMARK_DURATION
+                                comment below for why it is 26 hours, not the
+                                10 minutes a genuinely real-time feed would use.
+
+  foreachBatch + MERGE INTO     this is what makes reprocessing the SAME day
+                                (not just resuming a killed run) idempotent.
+                                dropDuplicates only sees state within its own
+                                query run -- it has no idea event_ids already
+                                sitting in the Delta table from an earlier,
+                                completed run even exist, so plain append
+                                would double the table on a genuine backfill.
+                                Each micro-batch is instead merged into the
+                                target table keyed on event_id, inserting only
+                                rows the table does not already hold. Sending
+                                the same day through this script any number of
+                                times converges to the same row count -- the
+                                actual guarantee CLAUDE.md's non-negotiable #2
+                                and its "MERGE INTO for idempotent upserts"
+                                line for Delta both ask for.
 
 Run:
     ./.venv/bin/python spark/stream_to_delta.py \
@@ -47,8 +63,9 @@ import sys
 import time
 from pathlib import Path
 
+from delta.tables import DeltaTable
 from dotenv import load_dotenv
-from pyspark.sql import functions as F
+from pyspark.sql import DataFrame, functions as F
 from pyspark.sql.streaming import StreamingQueryListener
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -138,6 +155,33 @@ def build_stream(spark, topic: str, bootstrap: str, max_offsets_per_trigger: int
     )
 
 
+def merge_batch(output: str):
+    """Returns the foreachBatch function that makes each micro-batch an
+    upsert instead of an append.
+
+    whenNotMatchedInsertAll only -- no whenMatched clause. GitHub Archive
+    events are immutable historical facts; a matched event_id means this
+    exact row already exists, so the correct action is to skip it, not
+    update it. That is what makes a full-day reprocess converge instead of
+    duplicating: every row either is new (inserted) or already present
+    (silently skipped), regardless of how many times the same day is sent
+    through this script.
+    """
+
+    def _merge(batch_df: DataFrame, batch_id: int) -> None:
+        if batch_df.isEmpty():
+            return
+        (
+            DeltaTable.forPath(batch_df.sparkSession, output)
+            .alias("t")
+            .merge(batch_df.alias("s"), "t.event_id = s.event_id")
+            .whenNotMatchedInsertAll()
+            .execute()
+        )
+
+    return _merge
+
+
 def main() -> None:
     load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -183,14 +227,21 @@ def main() -> None:
 
     stream = build_stream(spark, args.topic, args.bootstrap, args.max_offsets_per_trigger)
 
+    # MERGE INTO requires the target table to already exist. An empty table
+    # with the right schema and partitioning is enough -- every real row
+    # still arrives through merge_batch's insert path, first run included.
+    if not DeltaTable.isDeltaTable(spark, output):
+        spark.createDataFrame([], stream.schema).write.format("delta").partitionBy(
+            "event_date"
+        ).save(output)
+
     started = time.time()
     query = (
-        stream.writeStream.format("delta")
+        stream.writeStream.foreachBatch(merge_batch(output))
         .outputMode("append")
         .option("checkpointLocation", checkpoint)
-        .partitionBy("event_date")
         .trigger(availableNow=True)
-        .start(output)
+        .start()
     )
     query.awaitTermination()
     elapsed = time.time() - started
