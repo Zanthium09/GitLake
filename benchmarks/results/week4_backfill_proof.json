@@ -1,0 +1,19 @@
+{
+  "date_reprocessed": "2024-01-15",
+  "description": "Full pipeline (stream_ingest -> to_delta -> load_snowflake -> dbt_build) run twice for the same day via the Airflow DAG. Second run used a fresh Kafka topic and a fresh checkpoint against the table already populated by the first run, exercising to_delta's MERGE INTO idempotency for real rather than resuming a killed run (see spark/kill_restart_test.py and benchmarks/results/week2_kill_restart.json for that separate guarantee).",
+  "run_1": {
+    "delta_events_table": 5528300,
+    "snowflake_raw_events": 5528300,
+    "dbt_fct_events": 5528300
+  },
+  "run_2_reprocessed": {
+    "delta_events_table": 5528300,
+    "snowflake_raw_events": 5528300,
+    "dbt_fct_events": 5528300,
+    "snowflake_raw_events_distinct_event_id": 5528300,
+    "dbt_fct_events_distinct_event_id": 5528300
+  },
+  "identical_across_runs": true,
+  "duplicates_after_reprocess": 0,
+  "note": "Row counts are 5,528,300, not the raw 5,528,301 events GitHub Archive served -- one event (id 34822912958, an IssuesEvent) was emitted twice by GitHub Archive itself, byte-identical, confirmed by hand during week 3. That single confirmed duplicate is correctly collapsed to one row in every run; see dbt_project/models/staging/stg_events.sql."
+}
